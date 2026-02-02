@@ -220,19 +220,55 @@ with col1:
     if st.session_state.income_items:
         income_df = pd.DataFrame(st.session_state.income_items)
         
-        # Display table
+        # Create editable table
+        st.write("**Edit Income Items:**")
+        for idx, item in enumerate(st.session_state.income_items):
+            with st.container():
+                col_edit1, col_edit2, col_edit3 = st.columns([3, 2, 1])
+                
+                with col_edit1:
+                    new_source = st.text_input(
+                        "Source",
+                        value=item['source'],
+                        key=f"edit_income_source_{idx}",
+                        label_visibility="collapsed"
+                    )
+                
+                with col_edit2:
+                    new_amount_input = st.text_input(
+                        "Amount",
+                        value=str(item['amount']),
+                        key=f"edit_income_amount_{idx}",
+                        label_visibility="collapsed",
+                        placeholder="Amount or math"
+                    )
+                
+                with col_edit3:
+                    if st.button("🗑️", key=f"del_income_{idx}", help="Delete", use_container_width=True):
+                        st.session_state.income_items.pop(idx)
+                        st.rerun()
+                
+                # Update item if changed
+                new_amount = evaluate_math(new_amount_input)
+                if new_source != item['source'] or (new_amount and new_amount != item['amount']):
+                    if new_source and new_amount and new_amount > 0:
+                        st.session_state.income_items[idx] = {
+                            'source': new_source,
+                            'amount': new_amount
+                        }
+                
+                # Show calculated amount if it's a math expression
+                if new_amount_input and new_amount_input != str(item['amount']):
+                    if new_amount and new_amount > 0:
+                        st.caption(f"💰 = ${new_amount:,.2f}")
+        
+        # Summary table (read-only)
+        st.write("**Summary:**")
         st.dataframe(
             income_df.style.format({'amount': '${:,.2f}'}),
             use_container_width=True,
             hide_index=True
         )
-        
-        # Delete buttons
-        st.write("Remove items:")
-        for idx, item in enumerate(st.session_state.income_items):
-            if st.button(f"❌ {item['source']}", key=f"del_income_{idx}"):
-                st.session_state.income_items.pop(idx)
-                st.rerun()
     else:
         st.info("No income items added yet. Use the sidebar to add income sources.")
 
@@ -241,19 +277,67 @@ with col2:
     if st.session_state.expense_items:
         expense_df = pd.DataFrame(st.session_state.expense_items)
         
-        # Display table
+        # Create editable table
+        st.write("**Edit Expense Items:**")
+        for idx, item in enumerate(st.session_state.expense_items):
+            with st.container():
+                col_edit1, col_edit2, col_edit3, col_edit4 = st.columns([2, 2, 2, 1])
+                
+                with col_edit1:
+                    new_category = st.selectbox(
+                        "Category",
+                        sorted(st.session_state.custom_categories),
+                        index=sorted(st.session_state.custom_categories).index(item['category']) if item['category'] in st.session_state.custom_categories else 0,
+                        key=f"edit_expense_category_{idx}",
+                        label_visibility="collapsed"
+                    )
+                
+                with col_edit2:
+                    new_name = st.text_input(
+                        "Name",
+                        value=item['name'],
+                        key=f"edit_expense_name_{idx}",
+                        label_visibility="collapsed"
+                    )
+                
+                with col_edit3:
+                    new_amount_input = st.text_input(
+                        "Amount",
+                        value=str(item['amount']),
+                        key=f"edit_expense_amount_{idx}",
+                        label_visibility="collapsed",
+                        placeholder="Amount or math"
+                    )
+                
+                with col_edit4:
+                    if st.button("🗑️", key=f"del_expense_{idx}", help="Delete", use_container_width=True):
+                        st.session_state.expense_items.pop(idx)
+                        st.rerun()
+                
+                # Update item if changed
+                new_amount = evaluate_math(new_amount_input)
+                if (new_category != item['category'] or 
+                    new_name != item['name'] or 
+                    (new_amount and new_amount != item['amount'])):
+                    if new_name and new_amount and new_amount > 0:
+                        st.session_state.expense_items[idx] = {
+                            'category': new_category,
+                            'name': new_name,
+                            'amount': new_amount
+                        }
+                
+                # Show calculated amount if it's a math expression
+                if new_amount_input and new_amount_input != str(item['amount']):
+                    if new_amount and new_amount > 0:
+                        st.caption(f"💰 = ${new_amount:,.2f}")
+        
+        # Summary table (read-only)
+        st.write("**Summary:**")
         st.dataframe(
             expense_df.style.format({'amount': '${:,.2f}'}),
             use_container_width=True,
             hide_index=True
         )
-        
-        # Delete buttons
-        st.write("Remove items:")
-        for idx, item in enumerate(st.session_state.expense_items):
-            if st.button(f"❌ {item['name']}", key=f"del_expense_{idx}"):
-                st.session_state.expense_items.pop(idx)
-                st.rerun()
     else:
         st.info("No expense items added yet. Use the sidebar to add expenses.")
 
