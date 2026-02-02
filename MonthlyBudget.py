@@ -4,6 +4,33 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
 import json
+import re
+
+# Function to safely evaluate math expressions
+def evaluate_math(expression):
+    """
+    Safely evaluate a mathematical expression.
+    Returns the result as a float, or None if invalid.
+    """
+    try:
+        # Remove any whitespace
+        expression = str(expression).strip()
+        
+        # If it's already a number, return it
+        try:
+            return float(expression)
+        except ValueError:
+            pass
+        
+        # Allow only numbers, basic operators, parentheses, and decimal points
+        if not re.match(r'^[\d\+\-\*/\.\(\)\s]+$', expression):
+            return None
+        
+        # Evaluate the expression safely
+        result = eval(expression, {"__builtins__": {}}, {})
+        return float(result)
+    except:
+        return None
 
 # Page configuration
 st.set_page_config(
@@ -17,6 +44,11 @@ if 'income_items' not in st.session_state:
     st.session_state.income_items = []
 if 'expense_items' not in st.session_state:
     st.session_state.expense_items = []
+if 'custom_categories' not in st.session_state:
+    st.session_state.custom_categories = [
+        "Housing", "Transportation", "Food & Dining", "Utilities", 
+        "Healthcare", "Entertainment", "Shopping", "Savings", "Other"
+    ]
 
 # Title
 st.title("💰 Monthly Budget Tracker")
@@ -31,41 +63,107 @@ with st.sidebar:
     with tab1:
         st.subheader("Add Income")
         income_source = st.text_input("Income Source", key="income_source")
-        income_amount = st.number_input("Amount ($)", min_value=0.0, step=0.01, key="income_amount")
+        income_amount_input = st.text_input(
+            "Amount ($)", 
+            key="income_amount",
+            placeholder="e.g., 1000 or 500+250 or 40*52/12",
+            help="Enter a number or math expression (e.g., 40*52/12 for weekly to monthly)"
+        )
+        
+        # Show calculated amount
+        if income_amount_input:
+            calculated = evaluate_math(income_amount_input)
+            if calculated is not None and calculated > 0:
+                st.caption(f"💰 Calculated: ${calculated:,.2f}")
+            elif calculated is not None and calculated <= 0:
+                st.warning("Amount must be greater than 0")
+            else:
+                st.error("Invalid expression. Use only +, -, *, /, (), and numbers")
         
         if st.button("Add Income", use_container_width=True):
-            if income_source and income_amount > 0:
+            calculated_amount = evaluate_math(income_amount_input) if income_amount_input else None
+            if income_source and calculated_amount and calculated_amount > 0:
                 st.session_state.income_items.append({
                     'source': income_source,
-                    'amount': income_amount
+                    'amount': calculated_amount
                 })
-                st.success(f"Added {income_source}: ${income_amount:.2f}")
+                st.success(f"Added {income_source}: ${calculated_amount:.2f}")
                 st.rerun()
             else:
-                st.error("Please enter both source and amount")
+                st.error("Please enter valid source and amount")
     
     with tab2:
         st.subheader("Add Expense")
+        
+        # Category management
+        with st.expander("➕ Add New Category"):
+            new_category = st.text_input("New Category Name", key="new_category")
+            if st.button("Add Category", use_container_width=True):
+                if new_category and new_category not in st.session_state.custom_categories:
+                    st.session_state.custom_categories.append(new_category)
+                    st.success(f"Added category: {new_category}")
+                    st.rerun()
+                elif new_category in st.session_state.custom_categories:
+                    st.warning("Category already exists!")
+                else:
+                    st.error("Please enter a category name")
+        
         expense_category = st.selectbox(
             "Category",
-            ["Housing", "Transportation", "Food & Dining", "Utilities", 
-             "Healthcare", "Entertainment", "Shopping", "Savings", "Other"],
+            sorted(st.session_state.custom_categories),
             key="expense_category"
         )
         expense_name = st.text_input("Expense Name", key="expense_name")
-        expense_amount = st.number_input("Amount ($)", min_value=0.0, step=0.01, key="expense_amount")
+        expense_amount_input = st.text_input(
+            "Amount ($)", 
+            key="expense_amount",
+            placeholder="e.g., 50 or 25*4 or 100/2",
+            help="Enter a number or math expression (e.g., 25*4 for weekly to monthly)"
+        )
+        
+        # Show calculated amount
+        if expense_amount_input:
+            calculated = evaluate_math(expense_amount_input)
+            if calculated is not None and calculated > 0:
+                st.caption(f"💰 Calculated: ${calculated:,.2f}")
+            elif calculated is not None and calculated <= 0:
+                st.warning("Amount must be greater than 0")
+            else:
+                st.error("Invalid expression. Use only +, -, *, /, (), and numbers")
         
         if st.button("Add Expense", use_container_width=True):
-            if expense_name and expense_amount > 0:
+            calculated_amount = evaluate_math(expense_amount_input) if expense_amount_input else None
+            if expense_name and calculated_amount and calculated_amount > 0:
                 st.session_state.expense_items.append({
                     'category': expense_category,
                     'name': expense_name,
-                    'amount': expense_amount
+                    'amount': calculated_amount
                 })
-                st.success(f"Added {expense_name}: ${expense_amount:.2f}")
+                st.success(f"Added {expense_name}: ${calculated_amount:.2f}")
                 st.rerun()
             else:
-                st.error("Please enter both name and amount")
+                st.error("Please enter valid name and amount")
+    
+    st.markdown("---")
+    
+    # Manage categories
+    with st.expander("📋 Manage Categories"):
+        st.write("**Current Categories:**")
+        for category in sorted(st.session_state.custom_categories):
+            col_cat1, col_cat2 = st.columns([3, 1])
+            with col_cat1:
+                st.write(f"• {category}")
+            with col_cat2:
+                # Prevent deletion if category is in use
+                category_in_use = any(
+                    item['category'] == category 
+                    for item in st.session_state.expense_items
+                )
+                if st.button("🗑️", key=f"del_cat_{category}", 
+                           disabled=category_in_use,
+                           help="Cannot delete category with existing expenses"):
+                    st.session_state.custom_categories.remove(category)
+                    st.rerun()
     
     st.markdown("---")
     
@@ -82,7 +180,8 @@ with st.sidebar:
         if st.button("Export Data", use_container_width=True):
             export_data = {
                 'income': st.session_state.income_items,
-                'expenses': st.session_state.expense_items
+                'expenses': st.session_state.expense_items,
+                'categories': st.session_state.custom_categories
             }
             st.download_button(
                 label="Download JSON",
